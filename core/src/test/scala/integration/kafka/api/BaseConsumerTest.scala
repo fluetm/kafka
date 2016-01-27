@@ -309,6 +309,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       assertEquals(tp.topic(), record.topic())
       assertEquals(tp.partition(), record.partition())
       if (timestampType == TimestampType.CreateTime) {
+        assertEquals(timestampType, record.timestampType())
         val timestamp = startingTimestamp + i
         assertEquals(timestamp.toLong, record.timestamp())
       } else
