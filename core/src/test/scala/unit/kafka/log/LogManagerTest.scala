@@ -115,6 +115,46 @@ class LogManagerTest {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  @Test
+  def testTimestampBasedLogSegmentCleanup() {
+    val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
+    logManager.shutdown()
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
+    logProps.put(LogConfig.DeleteRetentionMsProp, 0L: java.lang.Long)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    logManager = createLogManager()
+    logManager.startup
+
+    // create a log
+    val log = logManager.createLog(TopicAndPartition(name, 0), config)
+
+    // add a bunch of messages to create a total of 20 segments
+    // each message will have an incrementing timestamp, starting at 0
+    val numMessages = 200
+    for(i <- 0 until numMessages) {
+      val set = TestUtils.singleMessageSet("test".getBytes(), timestamp = i)
+      log.append(set)
+    }
+
+    // no segments should be deleted yet
+    val originalNumSegments = log.numberOfSegments
+    logManager.cleanupLogs()
+    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, originalNumSegments)
+
+    // set log.retention.mintimestamp to halfway point in log
+    val minTs = 100L
+    val updatedProps = new Properties()
+    updatedProps.put(LogConfig.RetentionTimestampProp, minTs: java.lang.Long)
+    log.config = LogConfig.fromProps(config.originals, updatedProps)
+
+    // the first ten segments should be deleted
+    logManager.cleanupLogs()
+    assertEquals("Check that the first half of segments were deleted.", originalNumSegments / 2, log.numberOfSegments)
+
+  }
+
   /**
    * Test size-based cleanup. Append messages, then run cleanup and check that segments are deleted.
    */
