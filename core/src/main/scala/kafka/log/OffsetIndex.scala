@@ -310,18 +310,20 @@ class OffsetIndex(val logConfig: LogConfig, @volatile private[this] var _file: F
    * Forcefully free the buffer's mmap. We do this only on windows.
    */
   private def forceUnmap(m: MappedByteBuffer) {
-    try {
-      m match {
-        case buffer: DirectBuffer => {
-          var cleaner = buffer.cleaner()        
-          if ( cleaner != null) {
-            cleaner.clean()
+    if (m != null) {
+      try {
+        m match {
+          case buffer: DirectBuffer => {
+            var cleaner = buffer.cleaner()
+            if ( cleaner != null) {
+              cleaner.clean()
+            }
           }
+          case _ =>
         }
-        case _ =>
+      } catch {
+        case t: Throwable => warn("Error when freeing index buffer", t)
       }
-    } catch {
-      case t: Throwable => warn("Error when freeing index buffer", t)
     }
   }
   
@@ -362,6 +364,8 @@ class OffsetIndex(val logConfig: LogConfig, @volatile private[this] var _file: F
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
+    if (!memoryMappedFileUpdatesEnabled)
+      CoreUtils.swallow(forceUnmap(mmap))
     try Utils.atomicMoveWithFallback(_file.toPath, f.toPath)
     finally _file = f
   }
